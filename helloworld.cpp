@@ -198,17 +198,21 @@ void display() {
 
 
 	glLoadIdentity();                  // Reset the model-view matrix
-	glTranslatef(-1.5f, 0.0f, -6.0f);  // Move left and into the screen
-	glRotatef(anglePyramid, 1.0f, 1.0f, 0.0f);  // Rotate about the (1,1,0)-axis [NEW]
+	glTranslatef(-1.5f, 0.0f, -20.0f);  // Move left and into the screen
+	//glRotatef(anglePyramid, 1.0f, 1.0f, 0.0f);  // Rotate about the (1,1,0)-axis [NEW]
 
 	glBegin(GL_TRIANGLES);
-	btConvexHullShape *shape = (btConvexHullShape *)collisionShapes[1];
+	//btConvexHullShape *shape = (btConvexHullShape *)collisionShapes[1];
+	btConvexHullShape *shape = (btConvexHullShape *)obj->getCollisionShape();
 	glColor3f(0, 0, 1);
 	for (int i = 0; i < shape->getNumPoints(); ++ i) {
 		btVector3 a, b, c;
 		shape->getVertex(i, a);
+		a = trans * a;
 		for (int j = 0; j < shape->getNumEdges(); ++ j) {
 			shape->getEdge(j, b, c);
+			b = trans * b;
+			c = trans * c;
 			glVertex3f(a.x(), a.y(), a.z());
 			glVertex3f(b.x(), b.y(), b.z());
 			glVertex3f(c.x(), c.y(), c.z());
