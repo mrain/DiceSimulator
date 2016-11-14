@@ -9,7 +9,6 @@
 #include <GL/glut.h>
 #include "simulator.h"
 using namespace std;
-using namespace bullet;
 
 const double pi = acos(-1.);
 const char title[] = "Dice Simulator";
@@ -17,103 +16,54 @@ float anglePyramid = 0.0;
 int refreshMills = 10;
 double multiplier = 2;
 
+Simulator *simulator;
+
 /* Initialize OpenGL Graphics */
 void initGL() {
-   glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black and opaque
-   glClearDepth(1.0f);                   // Set background depth to farthest
-   glEnable(GL_DEPTH_TEST);   // Enable depth testing for z-culling
-   glDepthFunc(GL_LEQUAL);    // Set the type of depth-test
-   glShadeModel(GL_SMOOTH);   // Enable smooth shading
-   glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);  // Nice perspective corrections
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black and opaque
+	glClearDepth(1.0f);                   // Set background depth to farthest
+	glEnable(GL_DEPTH_TEST);   // Enable depth testing for z-culling
+	glDepthFunc(GL_LEQUAL);    // Set the type of depth-test
+	glShadeModel(GL_SMOOTH);   // Enable smooth shading
+	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);  // Nice perspective corrections
 
-   initBulletWorld();
+	simulator = new Simulator();
+   /*initBulletWorld();
    createGround();
-   createDice();
+   createDice();*/
 }
 
 void display() {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear color and depth buffers
 	glMatrixMode(GL_MODELVIEW);     // To operate on model-view matrix
 
-	stepSimulate((btScalar)refreshMills / 1000.0 * multiplier);
-	btCollisionObject *obj = world->getCollisionObjectArray()[1];
-	btRigidBody *body = btRigidBody::upcast(obj);
-	btTransform trans;
-	if (body && body->getMotionState()) {
-		body->getMotionState()->getWorldTransform(trans);
-	} else {
-		trans = obj->getWorldTransform();
-	}
+	simulator -> stepSimulate((btScalar)refreshMills / 1000.0 * multiplier);
 
-
+	
 	glLoadIdentity();                  // Reset the model-view matrix
 	glTranslatef(-1.5f, 0.0f, -20.0f);  // Move left and into the screen
 	//glRotatef(anglePyramid, 1.0f, 1.0f, 0.0f);  // Rotate about the (1,1,0)-axis [NEW]
 
 	glBegin(GL_TRIANGLES);
 	//btConvexHullShape *shape = (btConvexHullShape *)collisionShapes[1];
-	btConvexHullShape *shape = (btConvexHullShape *)obj->getCollisionShape();
+
+	//btConvexHullShape *shape = (btConvexHullShape *)obj->getCollisionShape();
+	btConvexHullShape shape = simulator->currentDiceShape();
 	glColor3f(0, 0, 1);
-	for (int i = 0; i < shape->getNumPoints(); ++ i) {
+	for (int i = 0; i < shape.getNumPoints(); ++ i) {
 		btVector3 a, b, c;
-		shape->getVertex(i, a);
-		a = trans * a;
-		for (int j = 0; j < shape->getNumEdges(); ++ j) {
-			shape->getEdge(j, b, c);
-			b = trans * b;
-			c = trans * c;
+		shape.getVertex(i, a);
+		//a = trans * a;
+		for (int j = 0; j < shape.getNumEdges(); ++ j) {
+			shape.getEdge(j, b, c);
+			//b = trans * b;
+			//c = trans * c;
 			glVertex3f(a.x(), a.y(), a.z());
 			glVertex3f(b.x(), b.y(), b.z());
 			glVertex3f(c.x(), c.y(), c.z());
 		}
 	}
 	glEnd();
-
-/*
-	glBegin(GL_POLYGON);
-
-	for (int i = 0; i < shape->getNumPoints(); ++ i) {
-		btVector3 point = shape->getUnscaledPoints()[i];
-		glVertex3f(point.x(), point.y(), point.z());
-	}
-
-	glEnd();*/
-	/*
-	glBegin(GL_TRIANGLES);           // Begin drawing the pyramid with 4 triangles
-	  // Front
-		glColor3f(1.0f, 0.0f, 0.0f);     // Red
-		glVertex3f( 0.0f, 1.0f, 0.0f);
-		glColor3f(0.0f, 1.0f, 0.0f);     // Green
-		glVertex3f(-1.0f, -1.0f, 1.0f);
-		glColor3f(0.0f, 0.0f, 1.0f);     // Blue
-		glVertex3f(1.0f, -1.0f, 1.0f);
-
-		// Right
-		glColor3f(1.0f, 0.0f, 0.0f);     // Red
-		glVertex3f(0.0f, 1.0f, 0.0f);
-		glColor3f(0.0f, 0.0f, 1.0f);     // Blue
-		glVertex3f(1.0f, -1.0f, 1.0f);
-		glColor3f(0.0f, 1.0f, 0.0f);     // Green
-		glVertex3f(1.0f, -1.0f, -1.0f);
-
-		// Back
-		glColor3f(1.0f, 0.0f, 0.0f);     // Red
-		glVertex3f(0.0f, 1.0f, 0.0f);
-		glColor3f(0.0f, 1.0f, 0.0f);     // Green
-		glVertex3f(1.0f, -1.0f, -1.0f);
-		glColor3f(0.0f, 0.0f, 1.0f);     // Blue
-		glVertex3f(-1.0f, -1.0f, -1.0f);
-
-		// Left
-		glColor3f(1.0f,0.0f,0.0f);       // Red
-		glVertex3f( 0.0f, 1.0f, 0.0f);
-		glColor3f(0.0f,0.0f,1.0f);       // Blue
-		glVertex3f(-1.0f,-1.0f,-1.0f);
-		glColor3f(0.0f,1.0f,0.0f);       // Green
-		glVertex3f(-1.0f,-1.0f, 1.0f);
-	glEnd();   // Done drawing the pyramid
-		*/
-
 	glutSwapBuffers();  // Swap the front and back frame buffers (double buffering)
 	// Update the rotational angle after each refresh [NEW]
 	anglePyramid += 0.2f;
