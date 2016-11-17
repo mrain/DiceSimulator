@@ -3,7 +3,10 @@
 #include "btBulletDynamicsCommon.h"
 #include "Vector3.h"
 #include <cstdlib>
+#include <algorithm>
 #include <ctime>
+// debug
+#include <iostream>
 
 class Simulator {
 private:
@@ -102,21 +105,19 @@ private:
 
 		world->setGravity(btVector3(0,-10,0));
 		///collision configuration contains default setup for memory, collision setup. Advanced users can create their own configuration.
-
-		srand(time(0));
 	}
 
 	void createGround() {
 		//the ground is a cube of side 100 at position y = -56.
 		//the sphere will hit it at y = -6, with center at -5
 
-		groundShape = new btBoxShape(btVector3(btScalar(50.),btScalar(50.),btScalar(50.)));
+		groundShape = new btBoxShape(btVector3(btScalar(500.),btScalar(500.),btScalar(500.)));
 
 		//collisionShapes.push_back(groundShape);
 
 		btTransform groundTransform;
 		groundTransform.setIdentity();
-		groundTransform.setOrigin(btVector3(0,-56,0));
+		groundTransform.setOrigin(btVector3(0,-506,0));
 
 		btScalar mass(0.);
 
@@ -138,6 +139,7 @@ private:
 
 	void createDice() {
 		Vector3 points[6];
+
 		points[0] = Vector3(0,1,0);
 		double tmp = pi * 2.0 / 5.0;
 		for (int i = 1; i < 6; ++ i)
@@ -175,12 +177,35 @@ private:
 	//		cerr << localInertia.x() << ' ' << localInertia.y() << ' ' << localInertia.z() << endl;
 		}
 
+		//Move to a certain height
 		startTransform.setOrigin(btVector3(0,10,0));
 
 		//using motionstate is recommended, it provides interpolation capabilities, and only synchronizes 'active' objects
 		btDefaultMotionState* myMotionState = new btDefaultMotionState(startTransform);
 		btRigidBody::btRigidBodyConstructionInfo rbInfo(mass,myMotionState,(btCollisionShape *)diceShape,localInertia);
 		btRigidBody* body = new btRigidBody(rbInfo);
+
+		// Apply an initial velocity
+		btScalar velocityScale = 10;
+		rx = randomDouble(-pi, pi);
+		ry = randomDouble(-pi, pi);
+		rz = randomDouble(-pi, pi);
+		body->setLinearVelocity(
+				btVector3(velocityScale, 0, 0)
+				.rotate(btVector3(0, 0, 1), rz)
+				.rotate(btVector3(0, 1, 0), ry)
+				.rotate(btVector3(1, 0, 0), rx)
+			);
+		rx = randomDouble(-pi, pi);
+		ry = randomDouble(-pi, pi);
+		rz = randomDouble(-pi, pi);
+		body->setAngularVelocity(
+				btVector3(velocityScale, 0, 0)
+				.rotate(btVector3(0, 0, 1), rz)
+				.rotate(btVector3(0, 1, 0), ry)
+				.rotate(btVector3(1, 0, 0), rx)
+			);
+
 
 		world->addRigidBody(body);
 
@@ -248,6 +273,82 @@ public:
 				//cerr << endl;
 			}
 		}*/
+	}
+
+	// roll the dice once, return the face-down
+	int simulate() {
+		// get Dice
+		btCollisionObject *obj = world->getCollisionObjectArray()[1];
+		btRigidBody *body = btRigidBody::upcast(obj);
+		btTransform trans;
+
+		int cnt = 0;
+		while (true) {
+			stepSimulate(0.01);
+			if (body->getLinearVelocity().length() == 0 && body->getAngularVelocity().length() == 0) {
+				++ cnt;
+				if (cnt > 10) {
+					if (body->getMotionState())
+						body->getMotionState()->getWorldTransform(trans);
+					else
+						trans = obj->getWorldTransform();
+					break;
+				}
+			} else {
+				cnt = 0;
+			}
+		}
+		/*
+		double height = 100; 
+		int count = 0;
+		while (true) {
+			// step size 10ms
+			stepSimulate(0.01);
+
+			if (body->getMotionState()) {
+				body->getMotionState()->getWorldTransform(trans);
+			} else {
+				trans = obj->getWorldTransform();
+			}
+
+			//std::cerr << body->getLinearVelocity().length() << ' ' << body->getAngularVelocity().length() << std::endl;
+
+			double now = trans.getOrigin().y();
+			if (abs(now - height) < 1e-6) {
+				++ count;
+				if (count > 100) break;
+			} else count = 0;
+			height = now;
+		}*/
+
+		// Check every face
+		int n = diceShape->getNumVertices();
+		btScalar h[n];
+		btScalar ground = 100;
+		for (int i = 0; i < n; ++ i) {
+			btVector3 pts;
+			diceShape->getVertex(i, pts);
+			pts = trans * pts;
+			h[i] = pts.y();
+			ground = std::min(ground, h[i]);
+			//std::cerr << h[i] << ' ';
+		}
+		//std::cerr << std::endl;
+
+		//bottom on the ground
+		if (h[0] - ground > 1e-2) return 0;
+
+		for (int i = 1; i < n; ++ i) {
+			if (h[i] - ground <= 1e-2 && h[(i % (n - 1)) + 1] - ground <= 1e-2) {
+				//std::cerr << "!" << i << std::endl;
+				return i;
+			}
+		}
+
+		for (int i = 0; i < n; ++ i)
+			std::cerr << h[i] << ' ';
+		std::cerr << std::endl;
+		return -1;
 	}
 
 	btConvexHullShape currentDiceShape() {

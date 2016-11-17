@@ -38,17 +38,12 @@ void display() {
 	glMatrixMode(GL_MODELVIEW);     // To operate on model-view matrix
 
 	simulator -> stepSimulate((btScalar)refreshMills / 1000.0 * multiplier);
-
 	
-	glLoadIdentity();                  // Reset the model-view matrix
-	glTranslatef(-1.5f, 0.0f, -20.0f);  // Move left and into the screen
-	//glRotatef(anglePyramid, 1.0f, 1.0f, 0.0f);  // Rotate about the (1,1,0)-axis [NEW]
-
-	glBegin(GL_TRIANGLES);
-	//btConvexHullShape *shape = (btConvexHullShape *)collisionShapes[1];
-
-	//btConvexHullShape *shape = (btConvexHullShape *)obj->getCollisionShape();
 	btConvexHullShape shape = simulator->currentDiceShape();
+
+	glLoadIdentity();                  // Reset the model-view matrix
+	glTranslatef(-1.5f, 0.0f, -30.0f);  // Move left and into the screen
+	glBegin(GL_TRIANGLES);
 	glColor3f(0, 0, 1);
 	for (int i = 0; i < shape.getNumPoints(); ++ i) {
 		btVector3 a, b, c;
