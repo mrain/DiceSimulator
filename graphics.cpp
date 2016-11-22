@@ -27,7 +27,17 @@ void initGL() {
 	glShadeModel(GL_SMOOTH);   // Enable smooth shading
 	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);  // Nice perspective corrections
 
-	simulator = new Simulator();
+
+	const int n = 6;
+	float angles[n];
+	const float h = 0.3;
+	int tot = 0;
+	for (int i = 0; i < n - 1; ++ i)
+		tot += (1 << i);
+	for (int i = 0; i < n - 1; ++ i)
+		angles[i] = pi * 2.0 * (1 << i) / tot;
+
+	simulator = new Simulator(n, angles, h);
    /*initBulletWorld();
    createGround();
    createDice();*/
@@ -79,6 +89,14 @@ void reshape(GLsizei width, GLsizei height) {  // GLsizei for non-negative integ
    gluPerspective(45.0f, aspect, 0.1f, 100.0f);
 }
 
+void processKeys(unsigned char key, int x, int y) {
+	switch (key) {
+		case 'r':
+			simulator->reset();
+			break;
+	}
+}
+
 void timer(int value) {
 	glutPostRedisplay();
 	glutTimerFunc(refreshMills, timer, 0);
@@ -93,6 +111,7 @@ int main(int argc, char** argv) {
 	glutCreateWindow(title);          // Create window with the given title
 	glutDisplayFunc(display);       // Register callback handler for window re-paint event
 	glutReshapeFunc(reshape);       // Register callback handler for window re-size event
+	glutKeyboardFunc(processKeys);	// Register callback handler for keyboard input
 	initGL();                       // Our own OpenGL initialization
 	glutTimerFunc(0, timer, 0);     // First timer call immediately [NEW]
 	glutMainLoop();                 // Enter the infinite event-processing loop

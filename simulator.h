@@ -5,12 +5,17 @@
 #include <cstdlib>
 #include <algorithm>
 #include <ctime>
+#include <vector>
 // debug
 #include <iostream>
+using namespace std;
 
 class Simulator {
 private:
 	const double pi = acos(-1.);
+	btVector3 *faceCheck;
+	int n;
+
 	btDiscreteDynamicsWorld *world;
 	//btAlignedObjectArray<btCollisionShape*> collisionShapes;
 	btDefaultCollisionConfiguration *collisionConfiguration;
@@ -20,7 +25,7 @@ private:
 	btCollisionShape *groundShape;
 	btConvexHullShape *diceShape;
 
-	void centroid_triangle(int n, const double *x, const double *y, double *result) {
+	void centroid_2d(int n, const double *x, const double *y, double *result) {
 		double A = 0;
 		for (int i = 0; i < n; ++ i)
 			A += x[i] * y[(i + 1) % n] - x[(i + 1) % n] * y[i];
@@ -46,7 +51,7 @@ private:
 	}
 
 	// cone shaped centroid
-	Vector3 centroid(int n, const Vector3 *pts) {
+	Vector3 centroid(int n, const Vector3 *pts, btVector3 *faceCheck) {
 		// consider each side
 		double total_mass = 0;
 		double result[3], x[n], y[n];
@@ -57,8 +62,9 @@ private:
 			x[i] = pts[i + 1].x();
 			y[i] = pts[i + 1].z();
 		}
-		centroid_triangle(n - 1, x, y, result);
-		ret += Vector3(result[0], 0, result[1]) * result[2];
+		centroid_2d(n - 1, x, y, result);
+		faceCheck[0] = Vector3(result[0], pts[1].y(), result[1]).toBullet();
+		ret += Vector3(result[0], pts[1].y(), result[1]) * result[2];
 		total_mass += result[2];
 
 		// side shape
@@ -73,15 +79,22 @@ private:
 			x[1] = A.dot(X); y[1] = A.dot(Y);
 			x[2] = B.dot(X); y[2] = B.dot(Y);
 
-			centroid_triangle(3, x, y, result);
+			centroid_2d(3, x, y, result);
 
-			//cerr << result[0] << ' ' << result[1] << ' ' << result[2] << endl;
+/*
+			cerr << x[0] << ' ' << y[0] << endl;
+			cerr << x[1] << ' ' << y[1] << endl;
+			cerr << x[2] << ' ' << y[2] << endl;
+			cerr << result[0] << ' ' << result[1] << ' ' << result[2] << endl;
+			*/
 
 			c = pts[0] + X * result[0] + Y * result[1];
-			ret += c * 0.5 * A.cross(B).length();
-			total_mass += 0.5 * A.cross(B).length();
+			faceCheck[i + 1] = c.toBullet();
+			ret += c * result[2];
+			total_mass += result[2];
 		}
-		return ret / total_mass;
+		ret = ret / total_mass;
+		return ret;
 	}
 
 	double randomDouble(double Min, double Max) {
@@ -137,37 +150,63 @@ private:
 		world->addRigidBody(body);
 	}
 
-	void createDice() {
+	// Pyramid shaped dice, bottom face is (n-1)-gon on a unit circle 
+	// sum of angles should be 2 * pi
+	void createDice(int n, const btScalar *angles, btScalar h) {
+		/*
+		vector<vector<int> > faces;
+		vector<int> face;
+		for (int i = 0; i < n - 1; ++ i)
+			face.push_back(i + 1);
+		faces.push_back(face);
+		for (int i = 1; i < n - 1; ++ i) {
+			face.clear();
+			face.push_back(0);
+			face.push_back(i);
+			face.push_back(i + 1);
+			faces.push_back(face);
+		}
+		*/
+
+		this->n = n;
 		Vector3 points[6];
+		btVector3 pts[n];
 
-		points[0] = Vector3(0,1,0);
-		double tmp = pi * 2.0 / 5.0;
-		for (int i = 1; i < 6; ++ i)
-			points[i] = Vector3(cos(tmp * i), 0, sin(tmp * i));
+		//points[0] = Vector3(0,1,0);
+		//double tmp = pi * 2.0 / 5.0;
+		double tmp = 0;
+		double x[n], y[n], result[3];
+		for (int i = 0; i < n - 1; ++ i) {
+			points[i + 1] = Vector3(cos(tmp), 0, sin(tmp));
+			x[i] = cos(tmp); y[i] = sin(tmp);
+			tmp += angles[i];
+		}
+		centroid_2d(n - 1, x, y, result);
+		points[0] = Vector3(result[0], h, result[1]);
 
-		//for (int i = 0; i < 6; ++ i) 
-	//		cerr << points[i].x() << ' ' << points[i].y() << ' ' << points[i].z() << endl;
-		Vector3 c = centroid(6, points);
-	//	cerr << c.x() << ' ' << c.y() << ' ' << c.z() << endl;
+		faceCheck = new btVector3[n];
+		Vector3 centerOfMass = centroid(n, points, faceCheck);
+		//std::cerr << centerOfMass.x() << ' ' << centerOfMass.y() << ' ' << centerOfMass.z() << std::endl;
 
-		btVector3 pts[6];
-		for (int i = 0; i < 6; ++ i)
-			pts[i] = points[i].toBullet();
+		for (int i = 0; i < n; ++ i) {
+			pts[i] = (points[i] - centerOfMass).toBullet();
+			//points[i] = Vector3(pts[i]);
+			faceCheck[i] = faceCheck[i] - centerOfMass.toBullet();
+		}
+		//centerOfMass = centroid(n, points, faceCheck);
+		//std::cerr << centerOfMass.x() << ' ' << centerOfMass.y() << ' ' << centerOfMass.z() << std::endl;
 
-		diceShape = new btConvexHullShape((btScalar *)&pts, 6);
+		// Mirtich
+		//Mirtich m(n, faces, pts);
+		//btVector3 com, inertia;
+		//m.calculate_com_and_inertia(com, inertia);
+		//std::cerr << com.x() << ' ' << com.y() << ' ' << com.z() << std::endl;
+
+		diceShape = new btConvexHullShape((btScalar *)&pts, n);
 
 		//collisionShapes.push_back(colShape);
 
-		/// Create Dynamic Objects
-		btTransform startTransform;
-		startTransform.setIdentity();
-		btScalar rx = randomDouble(-pi, pi);
-		btScalar ry = randomDouble(-pi, pi);
-		btScalar rz = randomDouble(-pi, pi);
-		startTransform.setRotation(btQuaternion(btVector3(1, 0, 0), rx) * btQuaternion(btVector3(0, 1, 0), ry) * btQuaternion(btVector3(0, 0, 1), rz));
-
 		btScalar	mass(1.f);
-
 		//rigidbody is dynamic if and only if mass is non zero, otherwise static
 		bool isDynamic = (mass != 0.f);
 
@@ -177,10 +216,19 @@ private:
 	//		cerr << localInertia.x() << ' ' << localInertia.y() << ' ' << localInertia.z() << endl;
 		}
 
-		//Move to a certain height
+
+		/// Create Dynamic Objects
+		btTransform startTransform;
+		startTransform.setIdentity();
+		btScalar rx = randomDouble(-pi, pi);
+		btScalar ry = randomDouble(-pi, pi);
+		btScalar rz = randomDouble(-pi, pi);
+		// random Rotation
+		startTransform.setRotation(btQuaternion(btVector3(1, 0, 0), rx) * btQuaternion(btVector3(0, 1, 0), ry) * btQuaternion(btVector3(0, 0, 1), rz));
+		// Move to a certain height
 		startTransform.setOrigin(btVector3(0,10,0));
 
-		//using motionstate is recommended, it provides interpolation capabilities, and only synchronizes 'active' objects
+		// using motionstate is recommended, it provides interpolation capabilities, and only synchronizes 'active' objects
 		btDefaultMotionState* myMotionState = new btDefaultMotionState(startTransform);
 		btRigidBody::btRigidBodyConstructionInfo rbInfo(mass,myMotionState,(btCollisionShape *)diceShape,localInertia);
 		btRigidBody* body = new btRigidBody(rbInfo);
@@ -206,6 +254,14 @@ private:
 				.rotate(btVector3(1, 0, 0), rx)
 			);
 
+		// debug
+		/*
+		btVector3 c = body->getCenterOfMassPosition();
+		std::cerr << c.x() << ' ' << c.y() << ' ' << c.z() << std::endl;
+		btTransform debugTrans;
+		body->getMotionState()->getWorldTransform(debugTrans);
+		std::cerr << debugTrans.getOrigin().x() << ' ' << debugTrans.getOrigin().y() << ' ' << debugTrans.getOrigin().z() << std::endl;
+		*/
 
 		world->addRigidBody(body);
 
@@ -248,6 +304,43 @@ private:
 	}
 
 public:
+	void reset() {
+		btCollisionObject* obj = world->getCollisionObjectArray()[1];
+		btRigidBody* body = btRigidBody::upcast(obj);
+
+		btTransform startTransform;
+		startTransform.setIdentity();
+		btScalar rx = randomDouble(-pi, pi);
+		btScalar ry = randomDouble(-pi, pi);
+		btScalar rz = randomDouble(-pi, pi);
+		startTransform.setRotation(btQuaternion(btVector3(1, 0, 0), rx) * btQuaternion(btVector3(0, 1, 0), ry) * btQuaternion(btVector3(0, 0, 1), rz));
+		startTransform.setOrigin(btVector3(0, 10, 0));
+
+		body->proceedToTransform(startTransform);
+		// Apply an initial velocity
+
+		btScalar velocityScale = 10;
+		rx = randomDouble(-pi, pi);
+		ry = randomDouble(-pi, pi);
+		rz = randomDouble(-pi, pi);
+		body->setLinearVelocity(
+				btVector3(velocityScale, 0, 0)
+				.rotate(btVector3(0, 0, 1), rz)
+				.rotate(btVector3(0, 1, 0), ry)
+				.rotate(btVector3(1, 0, 0), rx)
+			);
+		rx = randomDouble(-pi, pi);
+		ry = randomDouble(-pi, pi);
+		rz = randomDouble(-pi, pi);
+		body->setAngularVelocity(
+				btVector3(velocityScale, 0, 0)
+				.rotate(btVector3(0, 0, 1), rz)
+				.rotate(btVector3(0, 1, 0), ry)
+				.rotate(btVector3(1, 0, 0), rx)
+			);
+
+	}
+
 	void stepSimulate(btScalar secs) {
 		world->stepSimulation(secs, 10);
 		
@@ -322,7 +415,7 @@ public:
 		}*/
 
 		// Check every face
-		int n = diceShape->getNumVertices();
+		/*int n = diceShape->getNumVertices();
 		btScalar h[n];
 		btScalar ground = 100;
 		for (int i = 0; i < n; ++ i) {
@@ -347,7 +440,16 @@ public:
 
 		for (int i = 0; i < n; ++ i)
 			std::cerr << h[i] << ' ';
-		std::cerr << std::endl;
+		std::cerr << std::endl;*/
+		btScalar ground = 100;
+		btScalar h[n];
+		for (int i = 0; i < n; ++ i) {
+			btVector3 p = trans * faceCheck[i];
+			h[i] = p.y();
+			ground = std::min(ground, h[i]);
+		}
+		for (int i = 0; i < n; ++ i)
+			if (ground == h[i]) return i;
 		return -1;
 	}
 
@@ -374,7 +476,16 @@ public:
 	Simulator() {
 		initBulletWorld();
 		createGround();
-		createDice();
+		btScalar angles[5];
+		for (int i = 0; i < 5; ++ i)
+			angles[i] = pi * 2.0 / 5.0;
+		createDice(6, angles, 2);
+	}
+
+	Simulator(int n, const btScalar* angles, const btScalar h) {
+		initBulletWorld();
+		createGround();
+		createDice(n, angles, h);
 	}
 
 	~Simulator() {
