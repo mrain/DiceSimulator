@@ -34,6 +34,11 @@ int main() {
 		freq[ret] ++;
 		delete simulator;
 	}
+
+	cout << "----------------shape---------------" << endl;
+	Simulator::printDiceShape(n, angles, h);
+
+	cout << "------------frequency---------------" << endl;
 	for (int i = 0; i < n; ++ i) {
 		cout << i << ' ' << freq[i] << endl;
 	}

@@ -25,7 +25,7 @@ private:
 	btCollisionShape *groundShape;
 	btConvexHullShape *diceShape;
 
-	void centroid_2d(int n, const double *x, const double *y, double *result) {
+	static void centroid_2d(int n, const double *x, const double *y, double *result) {
 		double A = 0;
 		for (int i = 0; i < n; ++ i)
 			A += x[i] * y[(i + 1) % n] - x[(i + 1) % n] * y[i];
@@ -51,7 +51,7 @@ private:
 	}
 
 	// cone shaped centroid
-	Vector3 centroid(int n, const Vector3 *pts, btVector3 *faceCheck) {
+	static Vector3 centroid(int n, const Vector3 *pts, btVector3 *faceCheck) {
 		// consider each side
 		double total_mass = 0;
 		double result[3], x[n], y[n];
@@ -154,6 +154,7 @@ private:
 	// sum of angles should be 2 * pi
 	void createDice(int n, const btScalar *angles, btScalar h) {
 		/*
+		// used for Mirtich
 		vector<vector<int> > faces;
 		vector<int> face;
 		for (int i = 0; i < n - 1; ++ i)
@@ -490,6 +491,31 @@ public:
 
 	~Simulator() {
 		destroyBulletWorld();
+	}
+	
+	static void printDiceShape(int n, const btScalar* angles, const btScalar h) {
+		Vector3 points[6];
+
+		double tmp = 0;
+		double x[n], y[n], result[3];
+		for (int i = 0; i < n - 1; ++ i) {
+			points[i + 1] = Vector3(cos(tmp), 0, sin(tmp));
+			x[i] = cos(tmp); y[i] = sin(tmp);
+			tmp += angles[i];
+		}
+		centroid_2d(n - 1, x, y, result);
+		points[0] = Vector3(result[0], h, result[1]);
+
+		for (int i = 0; i < n; ++ i) {
+			cout << "Vertice #" << i << ": (" << points[i].x() << ',' << points[i].y() << ',' << points[i].z() << ")" << endl;
+		}
+
+		for (int i = 1; i < n; ++ i) {
+			cout << "Edge #0 -> #" << i << ": length " << (points[i] - points[0]).length() << endl;
+		}
+		for (int i = 1; i < n; ++ i) {
+			cout << "Edge #" << i << " -> #" << ((i % (n - 1)) + 1) << ": length " << (points[i] - points[(i % (n - 1)) + 1]).length() << endl;
+		}
 	}
 
 };
